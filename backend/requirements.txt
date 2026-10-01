@@ -1,0 +1,8 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-dotenv>=1.0
+supabase>=2.6
+PyJWT>=2.8
+python-multipart>=0.0.9
+cloudinary>=1.40
+openpyxl>=3.1
