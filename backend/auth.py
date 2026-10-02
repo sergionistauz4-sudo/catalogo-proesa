@@ -5,6 +5,9 @@ auth.py — Login y sesión (JWT)
 POST /api/auth/login   → { token, usuario }   (público)
 GET  /api/auth/me      → { usuario }          (requiere token)
 
+Cada login de un cliente (y cada vez que reabre la app con sesión guardada)
+se anota en la tabla `accesos` — ver accesos.py y el reporte en reportes.py.
+
 Dos roles:
   · admin   (asesor de ventas) → usuario y contraseña salen de las
             variables de entorno ADMIN_USUARIO / ADMIN_PASSWORD
@@ -34,6 +37,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
+from accesos import registrar_acceso
 from db import limpiar_nit, normalizar_nombre, supabase
 
 # ─── Configuración ───────────────────────────────────────────────────────────
@@ -184,25 +188,36 @@ def login(body: LoginBody):
     if not nit:
         raise _credenciales_invalidas()
 
+    # El NIT puede repetirse entre clientes (sucursales con el mismo NIT),
+    # así que traemos todos los que lo tienen y nos quedamos con los que
+    # además coinciden en el nombre.
     resp = (
         supabase.table("clientes")
         .select("id, nombre, nit, activo")
         .eq("nit", nit)
-        .limit(1)
         .execute()
     )
-    fila = (resp.data or [None])[0]
+    nombre_norm = normalizar_nombre(nombre)
+    coinciden = [f for f in (resp.data or []) if normalizar_nombre(f["nombre"]) == nombre_norm]
 
-    if not fila or normalizar_nombre(fila["nombre"]) != normalizar_nombre(nombre):
+    if not coinciden:
         raise _credenciales_invalidas()
-    if not fila.get("activo", False):
+
+    # Si hay varios con el mismo nombre y NIT, entra el primero que esté activo.
+    fila = next((f for f in coinciden if f.get("activo", False)), None)
+    if fila is None:
         raise _cuenta_desactivada()
 
     usuario = UsuarioOut(id=fila["id"], nombre=fila["nombre"], rol="cliente", nit=fila["nit"])
+    registrar_acceso(usuario.id)
     return LoginOut(token=_crear_token(usuario), usuario=usuario)
 
 
 # ─── GET /api/auth/me ────────────────────────────────────────────────────────
 @router.get("/me", response_model=MeOut)
 def me(usuario: Annotated[UsuarioOut, Depends(get_usuario_actual)]):
+    # Se llama cada vez que alguien reabre la app con la sesión guardada:
+    # cuenta como entrada (si pasaron más de 30 min desde la anterior).
+    if usuario.rol == "cliente":
+        registrar_acceso(usuario.id)
     return MeOut(usuario=usuario)

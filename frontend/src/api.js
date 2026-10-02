@@ -97,6 +97,46 @@ export async function api(path, { method = "GET", body, form } = {}) {
   return data;
 }
 
+// ─── Descarga de archivos (Excel) ────────────────────────────────────────────
+// El endpoint exige el token en un header, así que no sirve un <a href>:
+// se pide con fetch, se arma un blob y se dispara la descarga.
+export async function descargar(path, nombreArchivo) {
+  const token = localStorage.getItem("token") ?? "";
+  let resp;
+  try {
+    resp = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  } catch (_) {
+    throw new Error("Error de conexión. Verificá tu red e intentá de nuevo.");
+  }
+  if (resp.status === 401) window.dispatchEvent(new CustomEvent("sesion-expirada"));
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    throw new Error(data?.detail || `Error ${resp.status}`);
+  }
+  const url = URL.createObjectURL(await resp.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ─── Fechas en hora de Bolivia (los reportes cuentan los días así) ───────────
+export function hoyBolivia(offsetDias = 0) {
+  const d = new Date(Date.now() + offsetDias * 86400000);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/La_Paz" }).format(d); // AAAA-MM-DD
+}
+
+// "2026-10-01" → "mié 01/10"
+export function fechaCorta(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dia = new Intl.DateTimeFormat("es-BO", { weekday: "short", timeZone: "UTC" })
+    .format(new Date(Date.UTC(y, m - 1, d))).replace(".", "");
+  return `${dia} ${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}`;
+}
+
 // ─── Formatos ────────────────────────────────────────────────────────────────
 const fmtBs = new Intl.NumberFormat("es-BO", {
   minimumFractionDigits: 2,

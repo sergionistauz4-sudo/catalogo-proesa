@@ -67,6 +67,7 @@ const S = {
     border: `1px solid ${C.gray100}`, flexShrink: 0,
     display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
   },
+  dosCols: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "12px" },
   labelSeccion: {
     fontSize: "11.5px", fontWeight: 600, color: C.gray600, letterSpacing: "0.4px",
     textTransform: "uppercase", marginBottom: "7px",
@@ -79,7 +80,9 @@ const RESPONSIVE_CSS = `
   @media (min-width: 640px) { .gp-btn-editar-txt { display: inline; } }
 `;
 
-const FORM_VACIO = { nombre: "", precio: "", descripcion: "", activo: true };
+const FORM_VACIO = {
+  nombre: "", precio: "", descripcion: "", codigo: "", linea: "", subclase: "", stock: "", activo: true,
+};
 
 // ─── Formulario (crear / editar) ──────────────────────────────────────────────
 function FormProducto({ producto, onCerrar, onGuardado, onEliminado, mostrarToast }) {
@@ -88,6 +91,10 @@ function FormProducto({ producto, onCerrar, onGuardado, onEliminado, mostrarToas
     nombre:      producto.nombre,
     precio:      String(producto.precio ?? ""),
     descripcion: producto.descripcion ?? "",
+    codigo:      producto.codigo ?? "",
+    linea:       producto.linea ?? "",
+    subclase:    producto.subclase ?? "",
+    stock:       producto.stock == null ? "" : String(producto.stock),
     activo:      producto.activo,
   });
   const [archivo,      setArchivo]      = useState(null);   // File nuevo a subir
@@ -133,6 +140,7 @@ function FormProducto({ producto, onCerrar, onGuardado, onEliminado, mostrarToas
     const precio = parseFloat(String(form.precio).replace(",", "."));
     if (String(form.precio).trim() === "" || isNaN(precio)) e.precio = "Ingresá un precio válido.";
     else if (precio < 0) e.precio = "El precio no puede ser negativo.";
+    if (form.stock.trim() !== "" && !/^\d+$/.test(form.stock.trim())) e.stock = "Solo números enteros.";
     setErrores(e);
     return Object.keys(e).length === 0 ? precio : null;
   }
@@ -147,6 +155,10 @@ function FormProducto({ producto, onCerrar, onGuardado, onEliminado, mostrarToas
       nombre:      form.nombre.trim(),
       precio,
       descripcion: form.descripcion.trim(),
+      codigo:      form.codigo.trim(),
+      linea:       form.linea.trim(),
+      subclase:    form.subclase.trim(),
+      stock:       form.stock.trim() === "" ? null : parseInt(form.stock, 10),
       activo:      form.activo,
     };
 
@@ -156,7 +168,9 @@ function FormProducto({ producto, onCerrar, onGuardado, onEliminado, mostrarToas
         ? await api("/api/productos", { method: "POST", body })
         : await api(`/api/productos/${producto.id}`, { method: "PUT", body });
     } catch (e) {
-      setErrorGeneral(e.message);
+      // El 409 de código duplicado lo mostramos debajo del campo código
+      if (/código/i.test(e.message)) setErrores({ codigo: e.message });
+      else setErrorGeneral(e.message);
       setGuardando(false);
       return;
     }
@@ -224,6 +238,18 @@ function FormProducto({ producto, onCerrar, onGuardado, onEliminado, mostrarToas
 
       <Campo label="Descripción" value={form.descripcion} onChange={set("descripcion")} multilinea
         placeholder="Presentación, laboratorio, indicaciones, etc." />
+
+      <div style={S.dosCols}>
+        <Campo label="Código" value={form.codigo} onChange={set("codigo")}
+          placeholder="Ej: 50024" error={errores.codigo} />
+        <Campo label="Stock" value={form.stock} onChange={set("stock")} inputMode="numeric"
+          placeholder="Ej: 348" error={errores.stock} ayuda="Solo lo ves vos, no los clientes." />
+      </div>
+
+      <div style={S.dosCols}>
+        <Campo label="Línea" value={form.linea} onChange={set("linea")} placeholder="Ej: KENVUE" />
+        <Campo label="Subclase" value={form.subclase} onChange={set("subclase")} placeholder="Ej: BABY CARE" />
+      </div>
 
       <div>
         <div style={S.labelSeccion}>Imagen</div>
@@ -293,7 +319,8 @@ export default function GestionProductos() {
     const t = busqueda.trim().toLowerCase();
     return productos
       .filter(p => filtro === "todos" || (filtro === "visibles" ? p.activo : !p.activo))
-      .filter(p => !t || p.nombre.toLowerCase().includes(t) || (p.descripcion ?? "").toLowerCase().includes(t));
+      .filter(p => !t || [p.nombre, p.descripcion, p.codigo, p.linea, p.subclase]
+        .some(v => (v ?? "").toLowerCase().includes(t)));
   }, [productos, busqueda, filtro]);
 
   const totalVisibles = productos.filter(p => p.activo).length;
@@ -330,7 +357,7 @@ export default function GestionProductos() {
         </div>
 
         <div style={S.barra}>
-          <BarraBusqueda value={busqueda} onChange={setBusqueda} placeholder="Buscar producto…" />
+          <BarraBusqueda value={busqueda} onChange={setBusqueda} placeholder="Buscar por nombre, código o línea…" />
           <Segmentado opciones={FILTROS} valor={filtro} onChange={setFiltro} />
         </div>
 
@@ -365,7 +392,11 @@ export default function GestionProductos() {
                 </div>
                 <div style={S.info}>
                   <div style={S.nombre} title={p.nombre}>{p.nombre}</div>
-                  <div style={S.desc}>{p.descripcion || "Sin descripción"}</div>
+                  <div style={S.desc}>
+                    {p.codigo && <>Cód. {p.codigo} · </>}
+                    {p.stock != null && <>Stock {p.stock.toLocaleString("es-BO")} · </>}
+                    {p.descripcion || "Sin descripción"}
+                  </div>
                 </div>
                 <div style={S.derecha}>
                   <div className="gp-precio-col">

@@ -41,7 +41,10 @@ const S = {
   }),
   info: { flex: 1, minWidth: 0 },
   nombre: { fontSize: "14px", fontWeight: 600, color: C.navy, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  nit: { fontSize: "12px", color: C.gray600, marginTop: "2px", fontVariantNumeric: "tabular-nums" },
+  nit: {
+    fontSize: "12px", color: C.gray600, marginTop: "2px", fontVariantNumeric: "tabular-nums",
+    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+  },
   chip: (activo) => ({
     fontSize: "10.5px", fontWeight: 700, padding: "2px 8px", borderRadius: "20px", whiteSpace: "nowrap",
     color: activo ? C.green : C.errorText, background: activo ? C.greenLight : C.redLight,
@@ -63,9 +66,12 @@ const RESPONSIVE_CSS = `
 function FormCliente({ cliente, onCerrar, onGuardado, onEliminado, mostrarToast }) {
   const esNuevo = !cliente?.id;
   const [form, setForm] = useState({
-    nombre: cliente?.nombre ?? "",
-    nit:    cliente?.nit ?? "",
-    activo: cliente?.activo ?? true,
+    nombre:         cliente?.nombre ?? "",
+    nit:            cliente?.nit ?? "",
+    codigo_cliente: cliente?.codigo_cliente ?? "",
+    vendedor:       cliente?.vendedor ?? "",
+    ambito:         cliente?.ambito ?? "",
+    activo:         cliente?.activo ?? true,
   });
   const [errores,      setErrores]      = useState({});
   const [errorGeneral, setErrorGeneral] = useState(null);
@@ -87,15 +93,22 @@ function FormCliente({ cliente, onCerrar, onGuardado, onEliminado, mostrarToast 
 
     setGuardando(true);
     try {
-      const body = { nombre: form.nombre.trim(), nit: form.nit.trim(), activo: form.activo };
+      const body = {
+        nombre:         form.nombre.trim(),
+        nit:            form.nit.trim(),
+        codigo_cliente: form.codigo_cliente.trim(),
+        vendedor:       form.vendedor.trim(),
+        ambito:         form.ambito.trim(),
+        activo:         form.activo,
+      };
       const guardado = esNuevo
         ? await api("/api/clientes", { method: "POST", body })
         : await api(`/api/clientes/${cliente.id}`, { method: "PUT", body });
       mostrarToast(esNuevo ? "✓ Cliente creado" : "✓ Cambios guardados");
       onGuardado(guardado);
     } catch (err) {
-      // El 409 de NIT duplicado lo mostramos debajo del campo NIT
-      if (/NIT/i.test(err.message)) setErrores({ nit: err.message });
+      // El 409 de código duplicado lo mostramos debajo del campo código
+      if (/código/i.test(err.message)) setErrores({ codigo_cliente: err.message });
       else setErrorGeneral(err.message);
       setGuardando(false);
     }
@@ -138,7 +151,16 @@ function FormCliente({ cliente, onCerrar, onGuardado, onEliminado, mostrarToast 
 
       <Campo label="NIT (contraseña)" value={form.nit} onChange={set("nit")}
         placeholder="Ej: 1023456019" inputMode="text" error={errores.nit}
-        ayuda="Se guarda sin puntos, guiones ni espacios." />
+        ayuda="Se guarda sin puntos, guiones ni espacios. Puede repetirse entre sucursales." />
+
+      <Campo label="Código de cliente" value={form.codigo_cliente} onChange={set("codigo_cliente")}
+        placeholder="Ej: C0219576" error={errores.codigo_cliente} />
+
+      <Campo label="Vendedor" value={form.vendedor} onChange={set("vendedor")}
+        placeholder="Ej: Rodrigo Choque Tintaya" />
+
+      <Campo label="Ámbito de compra" value={form.ambito} onChange={set("ambito")}
+        placeholder="Ej: FARMACIA" />
 
       <div style={S.ayuda}>
         🔑 El cliente inicia sesión escribiendo este <b>nombre</b> y su <b>NIT</b> como contraseña.
@@ -187,7 +209,11 @@ export default function GestionClientes() {
     const nit = busqueda.replace(/[^0-9a-z]/gi, "").toUpperCase();
     return clientes
       .filter(c => filtro === "todos" || (filtro === "activos" ? c.activo : !c.activo))
-      .filter(c => !t || quitarTildes(c.nombre).includes(t) || (nit && c.nit.includes(nit)));
+      .filter(c => !t
+        || quitarTildes(c.nombre).includes(t)
+        || quitarTildes(c.vendedor ?? "").includes(t)
+        || quitarTildes(c.codigo_cliente ?? "").includes(t)
+        || (nit && c.nit.includes(nit)));
   }, [clientes, busqueda, filtro]);
 
   const activos = clientes.filter(c => c.activo).length;
@@ -224,7 +250,7 @@ export default function GestionClientes() {
         </div>
 
         <div style={S.barra}>
-          <BarraBusqueda value={busqueda} onChange={setBusqueda} placeholder="Buscar por nombre o NIT…" />
+          <BarraBusqueda value={busqueda} onChange={setBusqueda} placeholder="Buscar por nombre, NIT, código o vendedor…" />
           <Segmentado opciones={FILTROS} valor={filtro} onChange={setFiltro} />
         </div>
 
@@ -257,7 +283,8 @@ export default function GestionClientes() {
                 <div style={S.info}>
                   <div style={S.nombre} title={c.nombre}>{c.nombre}</div>
                   <div style={S.nit}>
-                    NIT {c.nit}
+                    {c.codigo_cliente && <>{c.codigo_cliente} · </>}NIT {c.nit}
+                    {c.vendedor && <> · {c.vendedor}</>}
                     {!c.activo && <span style={{ color: C.errorText, fontWeight: 600 }}> · bloqueado</span>}
                   </div>
                 </div>

@@ -49,3 +49,21 @@ def normalizar_nombre(nombre: str | None) -> str:
 def limpiar_espacios(texto: str | None) -> str:
     """Saca espacios de más al principio, al final y en el medio."""
     return re.sub(r"\s+", " ", texto or "").strip()
+
+
+def traer_todo(armar, tam: int = 1000) -> list[dict]:
+    """
+    Supabase devuelve como máximo 1000 filas por consulta. Esto pide de a
+    `tam` hasta traer todo. `armar` es una función que devuelve la consulta
+    SIN ejecutar (con select/filtros/orden), por ejemplo:
+        traer_todo(lambda: supabase.table("accesos").select("*").order("creado"))
+    El orden tiene que ser estable para que las páginas no se pisen.
+    """
+    filas: list[dict] = []
+    desde = 0
+    while True:
+        lote = armar().range(desde, desde + tam - 1).execute().data or []
+        filas.extend(lote)
+        if len(lote) < tam:
+            return filas
+        desde += tam

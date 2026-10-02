@@ -63,6 +63,7 @@ const S = {
     fontSize: "14px", fontWeight: 600, color: C.navy, lineHeight: 1.3,
     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
   },
+  porUnidad: { fontSize: "11px", fontWeight: 500, color: C.gray400 },
   precio: { fontSize: "16px", fontWeight: 700, color: C.red, fontVariantNumeric: "tabular-nums" },
   descripcion: {
     fontSize: "12.5px", color: C.gray600, lineHeight: 1.45,
@@ -106,7 +107,7 @@ function Tarjeta({ producto, onAbrir }) {
       </div>
       <div style={S.cuerpo}>
         <div style={S.nombre}>{producto.nombre}</div>
-        <div style={S.precio}>{formatoBs(producto.precio)}</div>
+        <div style={S.precio}>{formatoBs(producto.precio)} <span style={S.porUnidad}>por unidad</span></div>
         {producto.descripcion && <div style={S.descripcion}>{producto.descripcion}</div>}
       </div>
     </button>
@@ -209,7 +210,7 @@ export default function Catalogo({ vistaPrevia = false }) {
               <span style={{ fontSize: "12px", fontWeight: 600, color: C.gray600, textTransform: "uppercase", letterSpacing: "0.4px" }}>
                 Precio
               </span>
-              <span style={{ ...S.precio, fontSize: "24px" }}>{formatoBs(detalle.precio)}</span>
+              <span style={{ ...S.precio, fontSize: "24px" }}>{formatoBs(detalle.precio)} <span style={S.porUnidad}>por unidad</span></span>
             </div>
             <div>
               <div style={{ fontSize: "12px", fontWeight: 600, color: C.gray600, textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: "6px" }}>

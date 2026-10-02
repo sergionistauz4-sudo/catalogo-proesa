@@ -3,6 +3,7 @@
 productos.py — Catálogo de productos
 --------------------------------------
 GET    /api/productos/catalogo     → productos ACTIVOS, solo nombre/precio/descripción/imagen
+                                     (el stock, código, línea y subclase NO se envían al cliente)
                                      (cualquier usuario logueado — es lo que ve el cliente)
 GET    /api/productos              → todos los productos con todos sus campos (admin)
 GET    /api/productos/:id          → detalle de un producto (admin)
@@ -62,6 +63,10 @@ class ProductoCatalogo(BaseModel):
 
 class ProductoOut(ProductoCatalogo):
     """Vista completa del admin."""
+    codigo:     str | None = None
+    linea:      str | None = None
+    subclase:   str | None = None
+    stock:      int | None = None
     activo:     bool
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -71,6 +76,10 @@ class ProductoCreate(BaseModel):
     nombre:      str
     descripcion: str = ""
     precio:      float = Field(ge=0)
+    codigo:      str | None = None
+    linea:       str | None = None
+    subclase:    str | None = None
+    stock:       int | None = Field(default=None, ge=0)
     imagen_url:  str | None = None
     activo:      bool = True
 
@@ -79,6 +88,10 @@ class ProductoUpdate(BaseModel):
     nombre:      str | None = None
     descripcion: str | None = None
     precio:      float | None = Field(default=None, ge=0)
+    codigo:      str | None = None
+    linea:       str | None = None
+    subclase:    str | None = None
+    stock:       int | None = Field(default=None, ge=0)
     imagen_url:  str | None = None   # mandar null explícito la quita
     activo:      bool | None = None
 
@@ -89,7 +102,11 @@ class ImagenOut(BaseModel):
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
-CAMPOS = "id, nombre, descripcion, precio, imagen_url, imagen_public_id, activo, created_at, updated_at"
+CAMPOS = (
+    "id, codigo, linea, subclase, nombre, descripcion, precio, stock, "
+    "imagen_url, imagen_public_id, activo, created_at, updated_at"
+)
+OPCIONALES = ("codigo", "linea", "subclase")   # texto opcional: vacío → null
 
 
 def _traer_producto(producto_id: str) -> dict:
@@ -110,10 +127,8 @@ def _filtrar_busqueda(filas: list[dict], busqueda: str | None) -> list[dict]:
     if not busqueda or not busqueda.strip():
         return filas
     t = busqueda.strip().lower()
-    return [
-        f for f in filas
-        if t in (f.get("nombre") or "").lower() or t in (f.get("descripcion") or "").lower()
-    ]
+    campos = ("nombre", "descripcion", "codigo", "linea", "subclase")
+    return [f for f in filas if any(t in (f.get(c) or "").lower() for c in campos)]
 
 
 def _validar_nombre(nombre: str) -> str:
@@ -124,6 +139,23 @@ def _validar_nombre(nombre: str) -> str:
             detail="El nombre del producto no puede estar vacío.",
         )
     return nombre
+
+
+def _limpiar_opcional(valor: str | None) -> str | None:
+    valor = limpiar_espacios(valor)
+    return valor or None
+
+
+def _validar_codigo_unico(codigo: str | None, excluir_id: str | None = None) -> None:
+    if not codigo:
+        return
+    resp = supabase.table("productos").select("id, nombre").eq("codigo", codigo).limit(1).execute()
+    otro = (resp.data or [None])[0]
+    if otro and otro["id"] != excluir_id:
+        raise HTTPException(
+            status_code=409,
+            detail=f"El código {codigo} ya está registrado para «{otro['nombre']}».",
+        )
 
 
 def _borrar_imagen_cloudinary(public_id: str | None) -> None:
@@ -184,6 +216,9 @@ def crear_producto(
     nuevo["nombre"]      = _validar_nombre(body.nombre)
     nuevo["descripcion"] = (body.descripcion or "").strip()
     nuevo["precio"]      = round(body.precio, 2)
+    for campo in OPCIONALES:
+        nuevo[campo] = _limpiar_opcional(nuevo[campo])
+    _validar_codigo_unico(nuevo["codigo"])
 
     resp = supabase.table("productos").insert(nuevo).execute()
     if not resp.data:
@@ -214,6 +249,11 @@ def editar_producto(
         cambios["descripcion"] = (cambios["descripcion"] or "").strip()
     if "precio" in cambios:
         cambios["precio"] = round(cambios["precio"], 2)
+    for campo in OPCIONALES:
+        if campo in cambios:
+            cambios[campo] = _limpiar_opcional(cambios[campo])
+    if "codigo" in cambios:
+        _validar_codigo_unico(cambios["codigo"], excluir_id=producto_id)
     if "imagen_url" in cambios and not cambios["imagen_url"]:
         # Quitar imagen a mano → limpiar también la de Cloudinary
         cambios["imagen_url"] = None

@@ -21,6 +21,7 @@ import { C, FONT, iniciales } from "../api";
 export const TABS_ADMIN = [
   { id: "productos", label: "Productos",     icon: "📦" },
   { id: "clientes",  label: "Clientes",      icon: "👥" },
+  { id: "accesos",   label: "Accesos",       icon: "📊" },
   { id: "catalogo",  label: "Vista cliente", icon: "👁️" },
 ];
 

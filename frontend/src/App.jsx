@@ -5,7 +5,7 @@
  * Maneja el estado global de sesión y el routing entre pantallas:
  *   · Login
  *   · Cliente (farmacéutico): solo el Catálogo (lectura)
- *   · Admin (asesor de ventas): Productos (CRUD) · Clientes (CRUD) · Vista cliente
+ *   · Admin (asesor de ventas): Productos (CRUD) · Clientes (CRUD) · Accesos (reporte) · Vista cliente
  *
  * No usa react-router — el routing es por estado simple dado que son
  * pocas páginas post-login.
@@ -23,6 +23,7 @@ import Login            from "./pages/Login";
 import Catalogo         from "./pages/Catalogo";
 import GestionProductos from "./pages/GestionProductos";
 import GestionClientes  from "./pages/GestionClientes";
+import ReporteAccesos   from "./pages/ReporteAccesos";
 import Navbar           from "./components/Navbar";
 import { API, C, FONT, limpiarSesionLocal, usuarioLocal } from "./api";
 
@@ -127,6 +128,7 @@ export default function App() {
       {(!esAdmin || paginaActual === "catalogo") && <Catalogo vistaPrevia={esAdmin} />}
       {esAdmin && paginaActual === "productos" && <GestionProductos />}
       {esAdmin && paginaActual === "clientes"  && <GestionClientes />}
+      {esAdmin && paginaActual === "accesos"   && <ReporteAccesos />}
     </div>
   );
 }
