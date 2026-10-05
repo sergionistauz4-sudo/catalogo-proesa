@@ -2,8 +2,10 @@
 """
 productos.py — Catálogo de productos
 --------------------------------------
-GET    /api/productos/catalogo     → productos ACTIVOS, solo nombre/precio/descripción/imagen
-                                     (el stock, código, línea y subclase NO se envían al cliente)
+GET    /api/productos/catalogo     → productos ACTIVOS, solo nombre/precio/descripción/imagen/línea
+                                     (el stock, código y subclase NO se envían al cliente)
+                                     En el orden del Excel oficial (campo `orden`); los que no
+                                     tienen orden van al final, por nombre.
                                      (cualquier usuario logueado — es lo que ve el cliente)
 GET    /api/productos              → todos los productos con todos sus campos (admin)
 GET    /api/productos/:id          → detalle de un producto (admin)
@@ -59,14 +61,15 @@ class ProductoCatalogo(BaseModel):
     descripcion: str
     precio:      float
     imagen_url:  str | None = None
+    linea:       str | None = None      # para agrupar por línea (Kenvue / Kimberly)
 
 
 class ProductoOut(ProductoCatalogo):
     """Vista completa del admin."""
     codigo:     str | None = None
-    linea:      str | None = None
     subclase:   str | None = None
     stock:      int | None = None
+    orden:      int | None = None
     activo:     bool
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -103,10 +106,18 @@ class ImagenOut(BaseModel):
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 CAMPOS = (
-    "id, codigo, linea, subclase, nombre, descripcion, precio, stock, "
+    "id, codigo, linea, subclase, nombre, descripcion, precio, stock, orden, "
     "imagen_url, imagen_public_id, activo, created_at, updated_at"
 )
 OPCIONALES = ("codigo", "linea", "subclase")   # texto opcional: vacío → null
+
+
+def _en_orden_del_excel(filas: list[dict]) -> list[dict]:
+    """Orden del catálogo oficial (`orden`); sin orden → al final, por nombre."""
+    return sorted(
+        filas,
+        key=lambda f: (f.get("orden") is None, f.get("orden") or 0, (f.get("nombre") or "").lower()),
+    )
 
 
 def _traer_producto(producto_id: str) -> dict:
@@ -176,12 +187,15 @@ def catalogo(
 ):
     resp = (
         supabase.table("productos")
-        .select("id, nombre, descripcion, precio, imagen_url")
+        .select("id, nombre, descripcion, precio, imagen_url, linea, orden")
         .eq("activo", True)
         .order("nombre")
         .execute()
     )
-    return _filtrar_busqueda(resp.data or [], busqueda)
+    filas = _en_orden_del_excel(_filtrar_busqueda(resp.data or [], busqueda))
+    for f in filas:
+        f.pop("orden", None)      # el orden ya está aplicado; el cliente no lo necesita
+    return filas
 
 
 # ─── GET /api/productos ──────────────────────────────────────────────────────
@@ -194,7 +208,7 @@ def listar_productos(
     query = supabase.table("productos").select(CAMPOS).order("nombre")
     if activo is not None:
         query = query.eq("activo", activo)
-    return _filtrar_busqueda(query.execute().data or [], busqueda)
+    return _en_orden_del_excel(_filtrar_busqueda(query.execute().data or [], busqueda))
 
 
 # ─── GET /api/productos/:id ──────────────────────────────────────────────────

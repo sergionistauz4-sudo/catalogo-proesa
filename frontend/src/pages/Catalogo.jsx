@@ -2,9 +2,16 @@
 /**
  * Catalogo.jsx — Catálogo de solo lectura (lo que ve el cliente)
  * ----------------------------------------------------------------
- * Grilla de tarjetas con imagen · nombre · precio · descripción.
- * Tocar una tarjeta abre el detalle (descripción completa, imagen
- * grande). No hay ninguna acción de edición: es solo para consultar.
+ * 1. Portada: una tarjeta grande por LÍNEA (Kenvue, Kimberly-Clark) con su logo.
+ *    Tocar una línea muestra solo sus productos. Si se escribe en el buscador
+ *    de la portada, se busca en todas las líneas a la vez.
+ * 2. Productos de la línea: grilla con imagen · nombre · precio · descripción,
+ *    en el orden del catálogo oficial (lo ordena el backend).
+ * Tocar una tarjeta abre el detalle. No hay ninguna acción de edición.
+ *
+ * Para agregar una línea nueva: sumarla a LINEAS (id = como figura la columna
+ * LINEA en el Excel) y poner su logo en src/assets. Los productos con una línea
+ * que no está en LINEAS (o sin línea) aparecen en la tarjeta "Otros productos".
  *
  * Props:
  *   vistaPrevia  boolean — true cuando el admin lo mira desde "Vista cliente"
@@ -13,6 +20,16 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { C, FONT, api, formatoBs } from "../api";
 import { BarraBusqueda, BannerError, EstadoVacio, Modal, Skeleton } from "../components/ui";
+import logoKenvue   from "../assets/linea_kenvue.png";
+import logoKimberly from "../assets/linea_kimberly.png";
+
+// ─── Líneas del catálogo ──────────────────────────────────────────────────────
+export const LINEAS = [
+  { id: "KENVUE",   nombre: "Kenvue",         logo: logoKenvue,   fondo: "#019B81" },
+  { id: "KIMBERLY", nombre: "Kimberly-Clark", logo: logoKimberly, fondo: "#FFFFFF" },
+];
+const OTROS = { id: "__otros", nombre: "Otros productos", logo: null, fondo: C.navy };
+const lineaDe = (p) => (LINEAS.some(l => l.id === (p.linea ?? "").toUpperCase()) ? p.linea.toUpperCase() : OTROS.id);
 
 const S = {
   page: {
@@ -74,8 +91,47 @@ const S = {
 const RESPONSIVE_CSS = `
   @media (min-width: 640px) {
     .catalogo-grilla { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important; gap: 16px !important; }
+    .catalogo-lineas { grid-template-columns: repeat(2, 1fr) !important; gap: 20px !important; }
   }
 `;
+
+const L = {
+  grilla: { display: "grid", gridTemplateColumns: "1fr", gap: "14px" },
+  tarjeta: (hover) => ({
+    background: C.white, borderRadius: "18px", overflow: "hidden", padding: 0,
+    border: `1px solid ${hover ? "#D8D8E0" : C.border}`, cursor: "pointer", textAlign: "left",
+    fontFamily: "inherit", display: "flex", flexDirection: "column",
+    boxShadow: hover ? "0 12px 30px rgba(26,26,46,0.14)" : "0 2px 6px rgba(26,26,46,0.05)",
+    transform: hover ? "translateY(-3px)" : "none",
+    transition: "box-shadow 0.18s, transform 0.18s, border-color 0.18s",
+    WebkitTapHighlightColor: "transparent",
+  }),
+  imagen: (fondo) => ({
+    aspectRatio: "3 / 2", background: fondo, display: "flex", alignItems: "center", justifyContent: "center",
+    borderBottom: `1px solid ${C.gray100}`,
+  }),
+  pie: {
+    display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px",
+    padding: "14px 18px",
+  },
+  nombre: { fontSize: "17px", fontWeight: 700, color: C.navy },
+  cantidad: { fontSize: "12.5px", color: C.gray600, marginTop: "2px" },
+  flecha: (hover) => ({
+    fontSize: "13px", fontWeight: 600, color: hover ? C.white : C.red,
+    background: hover ? C.red : C.redLight, borderRadius: "20px", padding: "7px 14px",
+    whiteSpace: "nowrap", transition: "background 0.18s, color 0.18s",
+  }),
+  volver: {
+    display: "inline-flex", alignItems: "center", gap: "6px", alignSelf: "flex-start",
+    border: "none", background: "transparent", color: C.gray600, fontSize: "13.5px", fontWeight: 600,
+    cursor: "pointer", padding: "6px 2px", fontFamily: "inherit",
+  },
+  cabecera: { display: "flex", alignItems: "center", gap: "14px" },
+  miniLogo: (fondo) => ({
+    width: "84px", aspectRatio: "3 / 2", borderRadius: "10px", overflow: "hidden", flexShrink: 0,
+    background: fondo, border: `1px solid ${C.border}`,
+  }),
+};
 
 // ─── Imagen o placeholder ─────────────────────────────────────────────────────
 export function ImagenProducto({ url, alt, estilo }) {
@@ -114,6 +170,42 @@ function Tarjeta({ producto, onAbrir }) {
   );
 }
 
+// ─── Tarjeta grande de una línea (portada) ───────────────────────────────────
+function TarjetaLinea({ linea, cantidad, onAbrir }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      type="button"
+      style={L.tarjeta(hover)}
+      onClick={() => onAbrir(linea.id)}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      aria-label={`Ver productos de ${linea.nombre} (${cantidad})`}
+    >
+      <div style={L.imagen(linea.fondo)}>
+        {linea.logo
+          ? <img src={linea.logo} alt={linea.nombre} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          : <span style={{ color: C.white, fontSize: "26px", fontWeight: 700 }}>{linea.nombre}</span>}
+      </div>
+      <div style={L.pie}>
+        <div>
+          <div style={L.nombre}>{linea.nombre}</div>
+          <div style={L.cantidad}>{cantidad} {cantidad === 1 ? "producto" : "productos"}</div>
+        </div>
+        <span style={L.flecha(hover)}>Ver productos →</span>
+      </div>
+    </button>
+  );
+}
+
+function MiniLogo({ linea }) {
+  return (
+    <div style={L.miniLogo(linea.fondo)}>
+      {linea.logo && <img src={linea.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function Catalogo({ vistaPrevia = false }) {
   const [productos,  setProductos]  = useState([]);
@@ -121,6 +213,7 @@ export default function Catalogo({ vistaPrevia = false }) {
   const [error,      setError]      = useState(null);
   const [busqueda,   setBusqueda]   = useState("");
   const [detalle,    setDetalle]    = useState(null);
+  const [lineaSel,   setLineaSel]   = useState(null);   // null = portada con las líneas
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -136,14 +229,44 @@ export default function Catalogo({ vistaPrevia = false }) {
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  // Búsqueda local: el catálogo ya está cargado entero, no hace falta ir al backend
+  // Cuántos productos tiene cada línea (para las tarjetas de la portada)
+  const porLinea = useMemo(() => {
+    const cuenta = {};
+    productos.forEach(p => { const l = lineaDe(p); cuenta[l] = (cuenta[l] ?? 0) + 1; });
+    return cuenta;
+  }, [productos]);
+
+  const lineasPortada = useMemo(
+    () => [...LINEAS, OTROS].filter(l => porLinea[l.id]),
+    [porLinea]
+  );
+  const lineaActual = lineaSel ? ([...LINEAS, OTROS].find(l => l.id === lineaSel) ?? null) : null;
+
+  // Búsqueda local: el catálogo ya está cargado entero, no hace falta ir al backend.
+  // El orden es el que manda el backend (el del catálogo oficial).
   const visibles = useMemo(() => {
     const t = busqueda.trim().toLowerCase();
-    if (!t) return productos;
-    return productos.filter(p =>
+    const base = lineaSel ? productos.filter(p => lineaDe(p) === lineaSel) : productos;
+    if (!t) return base;
+    return base.filter(p =>
       p.nombre.toLowerCase().includes(t) || (p.descripcion ?? "").toLowerCase().includes(t)
     );
-  }, [productos, busqueda]);
+  }, [productos, busqueda, lineaSel]);
+
+  function abrirLinea(id) {
+    setLineaSel(id);
+    setBusqueda("");
+    window.scrollTo({ top: 0 });
+  }
+
+  function volverALineas() {
+    setLineaSel(null);
+    setBusqueda("");
+    window.scrollTo({ top: 0 });
+  }
+
+  // En la portada sin búsqueda se muestran las líneas; si se busca, los productos
+  const enPortada = !lineaSel && !busqueda.trim();
 
   const cerrarDetalle = useCallback(() => setDetalle(null), []);
 
@@ -158,16 +281,30 @@ export default function Catalogo({ vistaPrevia = false }) {
           </div>
         )}
 
-        <div style={S.encabezado}>
-          <div>
-            <h1 style={S.titulo}>Catálogo de productos</h1>
-            <p style={S.subtitulo}>Precios y presentaciones vigentes</p>
+        {lineaActual ? (
+          <>
+            <button type="button" style={L.volver} onClick={volverALineas}>← Todas las líneas</button>
+            <div style={L.cabecera}>
+              <MiniLogo linea={lineaActual} />
+              <div>
+                <h1 style={S.titulo}>{lineaActual.nombre}</h1>
+                <p style={S.subtitulo}>Precios y presentaciones vigentes</p>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div style={S.encabezado}>
+            <div>
+              <h1 style={S.titulo}>Catálogo de productos</h1>
+              <p style={S.subtitulo}>Elegí una línea para ver sus productos</p>
+            </div>
           </div>
-        </div>
+        )}
 
         <div style={S.barra}>
-          <BarraBusqueda value={busqueda} onChange={setBusqueda} placeholder="Buscar producto…" />
-          {!loading && !error && (
+          <BarraBusqueda value={busqueda} onChange={setBusqueda}
+            placeholder={lineaActual ? `Buscar en ${lineaActual.nombre}…` : "Buscar en todo el catálogo…"} />
+          {!loading && !error && !enPortada && (
             <span style={S.contador}>
               {visibles.length} {visibles.length === 1 ? "producto" : "productos"}
             </span>
@@ -176,9 +313,21 @@ export default function Catalogo({ vistaPrevia = false }) {
 
         <BannerError mensaje={error} onReintentar={cargar} />
 
-        {loading && (
+        {loading && (lineaSel ? (
           <div className="catalogo-grilla" style={S.grilla}>
             {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} height={280} radius={14} />)}
+          </div>
+        ) : (
+          <div className="catalogo-lineas" style={L.grilla}>
+            {LINEAS.map(l => <Skeleton key={l.id} height={300} radius={18} />)}
+          </div>
+        ))}
+
+        {!loading && !error && enPortada && productos.length > 0 && (
+          <div className="catalogo-lineas" style={L.grilla}>
+            {lineasPortada.map(l => (
+              <TarjetaLinea key={l.id} linea={l} cantidad={porLinea[l.id]} onAbrir={abrirLinea} />
+            ))}
           </div>
         )}
 
@@ -187,11 +336,13 @@ export default function Catalogo({ vistaPrevia = false }) {
             texto="Cuando tu asesor de ventas cargue productos, los vas a ver acá." />
         )}
 
-        {!loading && productos.length > 0 && visibles.length === 0 && (
-          <EstadoVacio titulo="Sin resultados" texto={`No encontramos productos para «${busqueda}».`} />
+        {!loading && !enPortada && productos.length > 0 && visibles.length === 0 && (
+          <EstadoVacio titulo="Sin resultados" texto={busqueda
+            ? `No encontramos productos para «${busqueda}»${lineaActual ? ` en ${lineaActual.nombre}` : ""}.`
+            : "Esta línea todavía no tiene productos."} />
         )}
 
-        {!loading && visibles.length > 0 && (
+        {!loading && !enPortada && visibles.length > 0 && (
           <div className="catalogo-grilla" style={S.grilla}>
             {visibles.map(p => <Tarjeta key={p.id} producto={p} onAbrir={setDetalle} />)}
           </div>
