@@ -2,8 +2,8 @@
 """
 productos.py — Catálogo de productos
 --------------------------------------
-GET    /api/productos/catalogo     → productos ACTIVOS, solo nombre/precio/descripción/imagen/línea
-                                     (el stock, código y subclase NO se envían al cliente)
+GET    /api/productos/catalogo     → productos ACTIVOS, solo código/nombre/precio/descripción/imagen/línea
+                                     (el stock y la subclase NO se envían al cliente)
                                      En el orden del Excel oficial (campo `orden`); los que no
                                      tienen orden van al final, por nombre.
                                      (cualquier usuario logueado — es lo que ve el cliente)
@@ -62,11 +62,11 @@ class ProductoCatalogo(BaseModel):
     precio:      float
     imagen_url:  str | None = None
     linea:       str | None = None      # para agrupar por línea (Kenvue / Kimberly)
+    codigo:      str | None = None      # el cliente lo ve para pedir por código
 
 
 class ProductoOut(ProductoCatalogo):
     """Vista completa del admin."""
-    codigo:     str | None = None
     subclase:   str | None = None
     stock:      int | None = None
     orden:      int | None = None
@@ -187,7 +187,7 @@ def catalogo(
 ):
     resp = (
         supabase.table("productos")
-        .select("id, nombre, descripcion, precio, imagen_url, linea, orden")
+        .select("id, codigo, nombre, descripcion, precio, imagen_url, linea, orden")
         .eq("activo", True)
         .order("nombre")
         .execute()
@@ -228,7 +228,8 @@ def crear_producto(
 ):
     nuevo = body.model_dump()
     nuevo["nombre"]      = _validar_nombre(body.nombre)
-    nuevo["descripcion"] = (body.descripcion or "").strip()
+    # sin descripción → por ahora se usa el nombre
+    nuevo["descripcion"] = (body.descripcion or "").strip() or nuevo["nombre"]
     nuevo["precio"]      = round(body.precio, 2)
     for campo in OPCIONALES:
         nuevo[campo] = _limpiar_opcional(nuevo[campo])

@@ -5,7 +5,7 @@
  * 1. Portada: una tarjeta grande por LÍNEA (Kenvue, Kimberly-Clark) con su logo.
  *    Tocar una línea muestra solo sus productos. Si se escribe en el buscador
  *    de la portada, se busca en todas las líneas a la vez.
- * 2. Productos de la línea: grilla con imagen · nombre · precio · descripción,
+ * 2. Productos de la línea: grilla con imagen · código · nombre · precio · descripción,
  *    en el orden del catálogo oficial (lo ordena el backend).
  * Tocar una tarjeta abre el detalle. No hay ninguna acción de edición.
  *
@@ -81,6 +81,11 @@ const S = {
     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
   },
   porUnidad: { fontSize: "11px", fontWeight: 500, color: C.gray400 },
+  codigo: {
+    alignSelf: "flex-start", fontSize: "11px", fontWeight: 600, color: C.gray600,
+    background: C.gray100, borderRadius: "6px", padding: "2px 7px",
+    fontVariantNumeric: "tabular-nums", letterSpacing: "0.2px",
+  },
   precio: { fontSize: "16px", fontWeight: 700, color: C.red, fontVariantNumeric: "tabular-nums" },
   descripcion: {
     fontSize: "12.5px", color: C.gray600, lineHeight: 1.45,
@@ -156,12 +161,13 @@ function Tarjeta({ producto, onAbrir }) {
       onClick={() => onAbrir(producto)}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      aria-label={`${producto.nombre}, ${formatoBs(producto.precio)}`}
+      aria-label={`${producto.codigo ? `Código ${producto.codigo}, ` : ""}${producto.nombre}, ${formatoBs(producto.precio)}`}
     >
       <div style={S.imgWrap}>
         <ImagenProducto url={producto.imagen_url} alt={producto.nombre} />
       </div>
       <div style={S.cuerpo}>
+        {producto.codigo && <span style={S.codigo}>Cód. {producto.codigo}</span>}
         <div style={S.nombre}>{producto.nombre}</div>
         <div style={S.precio}>{formatoBs(producto.precio)} <span style={S.porUnidad}>por unidad</span></div>
         {producto.descripcion && <div style={S.descripcion}>{producto.descripcion}</div>}
@@ -249,7 +255,9 @@ export default function Catalogo({ vistaPrevia = false }) {
     const base = lineaSel ? productos.filter(p => lineaDe(p) === lineaSel) : productos;
     if (!t) return base;
     return base.filter(p =>
-      p.nombre.toLowerCase().includes(t) || (p.descripcion ?? "").toLowerCase().includes(t)
+      p.nombre.toLowerCase().includes(t)
+      || (p.descripcion ?? "").toLowerCase().includes(t)
+      || (p.codigo ?? "").toLowerCase().includes(t)
     );
   }, [productos, busqueda, lineaSel]);
 
@@ -303,7 +311,7 @@ export default function Catalogo({ vistaPrevia = false }) {
 
         <div style={S.barra}>
           <BarraBusqueda value={busqueda} onChange={setBusqueda}
-            placeholder={lineaActual ? `Buscar en ${lineaActual.nombre}…` : "Buscar en todo el catálogo…"} />
+            placeholder={lineaActual ? `Buscar en ${lineaActual.nombre} por nombre o código…` : "Buscar por nombre o código…"} />
           {!loading && !error && !enPortada && (
             <span style={S.contador}>
               {visibles.length} {visibles.length === 1 ? "producto" : "productos"}
@@ -357,6 +365,14 @@ export default function Catalogo({ vistaPrevia = false }) {
               <ImagenProducto url={detalle.imagen_url} alt={detalle.nombre}
                 estilo={{ width: "100%", height: "100%", objectFit: "contain", padding: "14px" }} />
             </div>
+            {detalle.codigo && (
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "10px" }}>
+                <span style={{ fontSize: "12px", fontWeight: 600, color: C.gray600, textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                  Código
+                </span>
+                <span style={{ fontSize: "16px", fontWeight: 700, color: C.navy, fontVariantNumeric: "tabular-nums" }}>{detalle.codigo}</span>
+              </div>
+            )}
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "10px" }}>
               <span style={{ fontSize: "12px", fontWeight: 600, color: C.gray600, textTransform: "uppercase", letterSpacing: "0.4px" }}>
                 Precio
