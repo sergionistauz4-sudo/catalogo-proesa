@@ -5,13 +5,18 @@
  * 1. Portada: una tarjeta grande por LÍNEA (Kenvue, Kimberly-Clark) con su logo.
  *    Tocar una línea muestra solo sus productos. Si se escribe en el buscador
  *    de la portada, se busca en todas las líneas a la vez.
- * 2. Productos de la línea: grilla con imagen · código · nombre · precio · descripción,
- *    en el orden del catálogo oficial (lo ordena el backend).
+ * 2. Productos de la línea: arriba hay una fila de SUBCLASES para filtrar
+ *    ("Todas" por defecto). Debajo, la grilla con imagen · código · nombre ·
+ *    precio · descripción, en el orden del catálogo oficial (lo ordena el backend).
  * Tocar una tarjeta abre el detalle. No hay ninguna acción de edición.
  *
  * Para agregar una línea nueva: sumarla a LINEAS (id = como figura la columna
  * LINEA en el Excel) y poner su logo en src/assets. Los productos con una línea
  * que no está en LINEAS (o sin línea) aparecen en la tarjeta "Otros productos".
+ *
+ * Las subclases salen solas de la columna SUBCLASE de cada producto (el backend
+ * tiene que enviar el campo `subclase` en /api/productos/catalogo). Los productos
+ * sin subclase se agrupan en el botón "Otros".
  *
  * Props:
  *   vistaPrevia  boolean — true cuando el admin lo mira desde "Vista cliente"
@@ -30,6 +35,12 @@ export const LINEAS = [
 ];
 const OTROS = { id: "__otros", nombre: "Otros productos", logo: null, fondo: C.navy };
 const lineaDe = (p) => (LINEAS.some(l => l.id === (p.linea ?? "").toUpperCase()) ? p.linea.toUpperCase() : OTROS.id);
+
+// ─── Subclases (filtro dentro de una línea) ───────────────────────────────────
+// Se normaliza a mayúsculas para que "Baby Care" y "BABY CARE" cuenten como una sola.
+const SIN_SUBCLASE = "__sin";
+const subclaseDe = (p) => (p.subclase ?? "").trim().toUpperCase() || SIN_SUBCLASE;
+const nombreSubclase = (id) => (id === SIN_SUBCLASE ? "Otros" : id);
 
 const S = {
   page: {
@@ -94,6 +105,7 @@ const S = {
 };
 
 const RESPONSIVE_CSS = `
+  .catalogo-subclases::-webkit-scrollbar { display: none; }
   @media (min-width: 640px) {
     .catalogo-grilla { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important; gap: 16px !important; }
     .catalogo-lineas { grid-template-columns: repeat(2, 1fr) !important; gap: 20px !important; }
@@ -135,6 +147,27 @@ const L = {
   miniLogo: (fondo) => ({
     width: "84px", aspectRatio: "3 / 2", borderRadius: "10px", overflow: "hidden", flexShrink: 0,
     background: fondo, border: `1px solid ${C.border}`,
+  }),
+};
+
+// Fila de subclases (botones que se desplazan hacia el costado en pantallas chicas)
+const SC = {
+  fila: {
+    display: "flex", gap: "8px", overflowX: "auto", padding: "2px 0 6px",
+    scrollbarWidth: "none", WebkitOverflowScrolling: "touch",
+  },
+  chip: (activo) => ({
+    flexShrink: 0, whiteSpace: "nowrap", cursor: "pointer", fontFamily: "inherit",
+    minHeight: "38px", padding: "0 14px", borderRadius: "20px",
+    fontSize: "13px", fontWeight: 600,
+    border: `1.5px solid ${activo ? C.navy : C.gray200}`,
+    background: activo ? C.navy : C.white,
+    color: activo ? C.white : C.navy,
+    transition: "background 0.15s, color 0.15s, border-color 0.15s",
+    WebkitTapHighlightColor: "transparent",
+  }),
+  num: (activo) => ({
+    marginLeft: "6px", fontSize: "11.5px", fontWeight: 500, opacity: activo ? 0.8 : 0.6,
   }),
 };
 
@@ -214,12 +247,13 @@ function MiniLogo({ linea }) {
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function Catalogo({ vistaPrevia = false }) {
-  const [productos,  setProductos]  = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [error,      setError]      = useState(null);
-  const [busqueda,   setBusqueda]   = useState("");
-  const [detalle,    setDetalle]    = useState(null);
-  const [lineaSel,   setLineaSel]   = useState(null);   // null = portada con las líneas
+  const [productos,   setProductos]   = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState(null);
+  const [busqueda,    setBusqueda]    = useState("");
+  const [detalle,     setDetalle]     = useState(null);
+  const [lineaSel,    setLineaSel]    = useState(null);   // null = portada con las líneas
+  const [subclaseSel, setSubclaseSel] = useState(null);   // null = todas las subclases
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -248,27 +282,46 @@ export default function Catalogo({ vistaPrevia = false }) {
   );
   const lineaActual = lineaSel ? ([...LINEAS, OTROS].find(l => l.id === lineaSel) ?? null) : null;
 
+  // Subclases de la línea abierta, en el orden en que aparecen en el catálogo
+  // (el backend ya manda los productos en el orden del Excel oficial).
+  const subclases = useMemo(() => {
+    if (!lineaSel) return [];
+    const cuenta = new Map();
+    productos.forEach(p => {
+      if (lineaDe(p) !== lineaSel) return;
+      const s = subclaseDe(p);
+      cuenta.set(s, (cuenta.get(s) ?? 0) + 1);
+    });
+    return [...cuenta].map(([id, cantidad]) => ({ id, cantidad }));
+  }, [productos, lineaSel]);
+
+  const totalLinea = subclases.reduce((suma, s) => suma + s.cantidad, 0);
+
   // Búsqueda local: el catálogo ya está cargado entero, no hace falta ir al backend.
   // El orden es el que manda el backend (el del catálogo oficial).
   const visibles = useMemo(() => {
     const t = busqueda.trim().toLowerCase();
-    const base = lineaSel ? productos.filter(p => lineaDe(p) === lineaSel) : productos;
+    const base = lineaSel
+      ? productos.filter(p => lineaDe(p) === lineaSel && (!subclaseSel || subclaseDe(p) === subclaseSel))
+      : productos;
     if (!t) return base;
     return base.filter(p =>
       p.nombre.toLowerCase().includes(t)
       || (p.descripcion ?? "").toLowerCase().includes(t)
       || (p.codigo ?? "").toLowerCase().includes(t)
     );
-  }, [productos, busqueda, lineaSel]);
+  }, [productos, busqueda, lineaSel, subclaseSel]);
 
   function abrirLinea(id) {
     setLineaSel(id);
+    setSubclaseSel(null);
     setBusqueda("");
     window.scrollTo({ top: 0 });
   }
 
   function volverALineas() {
     setLineaSel(null);
+    setSubclaseSel(null);
     setBusqueda("");
     window.scrollTo({ top: 0 });
   }
@@ -319,6 +372,25 @@ export default function Catalogo({ vistaPrevia = false }) {
           )}
         </div>
 
+        {/* ── Subclases de la línea (solo si la línea tiene más de una) ── */}
+        {lineaActual && !loading && !error && subclases.length > 1 && (
+          <div className="catalogo-subclases" style={SC.fila} role="group" aria-label="Filtrar por subclase">
+            <button type="button" style={SC.chip(!subclaseSel)} aria-pressed={!subclaseSel}
+              onClick={() => setSubclaseSel(null)}>
+              Todas<span style={SC.num(!subclaseSel)}>{totalLinea}</span>
+            </button>
+            {subclases.map(s => {
+              const activa = subclaseSel === s.id;
+              return (
+                <button key={s.id} type="button" style={SC.chip(activa)} aria-pressed={activa}
+                  onClick={() => setSubclaseSel(s.id)}>
+                  {nombreSubclase(s.id)}<span style={SC.num(activa)}>{s.cantidad}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <BannerError mensaje={error} onReintentar={cargar} />
 
         {loading && (lineaSel ? (
@@ -346,7 +418,7 @@ export default function Catalogo({ vistaPrevia = false }) {
 
         {!loading && !enPortada && productos.length > 0 && visibles.length === 0 && (
           <EstadoVacio titulo="Sin resultados" texto={busqueda
-            ? `No encontramos productos para «${busqueda}»${lineaActual ? ` en ${lineaActual.nombre}` : ""}.`
+            ? `No encontramos productos para «${busqueda}»${lineaActual ? ` en ${lineaActual.nombre}` : ""}${subclaseSel ? ` (${nombreSubclase(subclaseSel)})` : ""}.`
             : "Esta línea todavía no tiene productos."} />
         )}
 

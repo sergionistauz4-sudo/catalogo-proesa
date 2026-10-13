@@ -2,8 +2,8 @@
 """
 productos.py — Catálogo de productos
 --------------------------------------
-GET    /api/productos/catalogo     → productos ACTIVOS, solo código/nombre/precio/descripción/imagen/línea
-                                     (el stock y la subclase NO se envían al cliente)
+GET    /api/productos/catalogo     → productos ACTIVOS, solo código/nombre/precio/descripción/imagen/línea/subclase
+                                     (el stock NO se envía al cliente)
                                      En el orden del Excel oficial (campo `orden`); los que no
                                      tienen orden van al final, por nombre.
                                      (cualquier usuario logueado — es lo que ve el cliente)
@@ -63,11 +63,11 @@ class ProductoCatalogo(BaseModel):
     imagen_url:  str | None = None
     linea:       str | None = None      # para agrupar por línea (Kenvue / Kimberly)
     codigo:      str | None = None      # el cliente lo ve para pedir por código
+    subclase:    str | None = None      # para filtrar dentro de una línea
 
 
 class ProductoOut(ProductoCatalogo):
     """Vista completa del admin."""
-    subclase:   str | None = None
     stock:      int | None = None
     orden:      int | None = None
     activo:     bool
@@ -187,7 +187,7 @@ def catalogo(
 ):
     resp = (
         supabase.table("productos")
-        .select("id, codigo, nombre, descripcion, precio, imagen_url, linea, orden")
+        .select("id, codigo, nombre, descripcion, precio, imagen_url, linea, subclase, orden")
         .eq("activo", True)
         .order("nombre")
         .execute()
