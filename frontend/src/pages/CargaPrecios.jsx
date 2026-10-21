@@ -173,8 +173,7 @@ export default function CargaPrecios() {
         <div>
           <h1 style={S.titulo}>Actualizar precios</h1>
           <p style={S.subtitulo}>
-            Subí el Excel con la lista de precios del mes. Se usan el <b>código</b> del producto y la <b>columna G</b> (precio nuevo);
-            lo demás del archivo se ignora. Primero ves qué cambiaría y recién después lo aplicás.
+            Subí el Excel con la lista de precios.
           </p>
         </div>
 
