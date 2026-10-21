@@ -20,6 +20,7 @@ from auth      import router as auth_router
 from productos import router as productos_router
 from clientes  import router as clientes_router
 from reportes  import router as reportes_router
+from precios   import router as precios_router
 from db        import supabase
 
 app = FastAPI(
@@ -50,6 +51,7 @@ app.include_router(auth_router)
 app.include_router(productos_router)
 app.include_router(clientes_router)
 app.include_router(reportes_router)
+app.include_router(precios_router)
 
 
 # UptimeRobot (plan gratis) pregunta con HEAD, por eso aceptamos GET y HEAD.

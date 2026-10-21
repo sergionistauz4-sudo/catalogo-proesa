@@ -363,7 +363,7 @@ export default function Login({ onLoginSuccess }) {
                 <span style={S.dividerText}>o</span>
                 <div style={S.dividerLine} />
               </div>
-
+                
               <p style={S.helpText}>
                 ¿No podés ingresar?{" "}
                 <a href="mailto:israeltinini2@gmail.com" style={S.helpLink}>
